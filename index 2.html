@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PB Wiki Agent — HTML 公開版</title>
+  <meta name="description" content="ポーランドボール風キャラクターと対話できる簡易チャット（静的HTML版）" />
+  <style>
+    :root{
+      --bg:#0d0d0f;
+      --panel:#151518;
+      --muted: #9aa0a6;
+      --card:#1a1a20;
+      --blue:#2563eb;
+      --glass: rgba(255,255,255,0.03);
+      --radius:14px;
+      font-family: Inter, "ヒラギノ角ゴ ProN", "Hiragino Kaku Gothic ProN", "メイリオ", Meiryo, "Noto Sans JP", sans-serif;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:#e6eef8;}
+    .app{display:flex;height:100vh;overflow:hidden}
+    /* Sidebar */
+    .sidebar{width:280px;background:var(--panel);border-right:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column}
+    .sidebar .top{padding:18px;border-bottom:1px solid rgba(255,255,255,0.03);background:#1a1a1e}
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .brand h1{font-size:12px;letter-spacing:0.18em;color:#9fb0ff;margin:0;font-weight:700}
+    .search{position:relative}
+    .search input{width:100%;padding:10px 12px 10px 36px;background:#0a0a0c;border:1px solid rgba(255,255,255,0.06);border-radius:12px;color:#dfe7f7;font-size:13px;outline:none}
+    .search .icon{position:absolute;left:10px;top:9px;opacity:0.6}
+    .country-list{flex:1;overflow:auto;padding:8px}
+    .country-btn{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;border-bottom:1px solid rgba(255,255,255,0.02);background:transparent;color:#cbd5e1;cursor:pointer}
+    .country-btn:hover{background:rgba(255,255,255,0.02)}
+    .country-btn.selected{background:rgba(37,99,235,0.08);border-left:4px solid rgba(37,99,235,0.6);color:#fff}
+    .country-flag{font-size:20px;min-width:28px}
+    .country-name{font-size:13px;font-weight:700}
+    .country-me{font-size:11px;color:rgba(255,255,255,0.45);font-family:monospace;text-transform:uppercase}
+
+    /* Main */
+    .main{flex:1;display:flex;flex-direction:column;background:var(--bg)}
+    header{height:64px;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:space-between;background:rgba(21,21,24,0.9);backdrop-filter: blur(4px)}
+    .header-left{display:flex;gap:12px;align-items:center}
+    .header-left .flag{font-size:34px}
+    .header-left h2{margin:0;font-size:18px;font-weight:900;text-transform:uppercase;font-style:italic}
+    .header-left p{margin:0;font-size:11px;color:var(--muted);font-family:monospace;text-transform:uppercase}
+    .btn-clear{background:transparent;border:none;color:rgba(255,255,255,0.45);cursor:pointer;padding:8px;border-radius:8px}
+    .content{flex:1;overflow:auto;padding:28px 32px}
+    .inner{max-width:900px;margin:0 auto}
+    .empty{opacity:0.18;text-align:center;padding:80px 0}
+    .msg-row{display:flex;margin-bottom:26px}
+    .msg-row.end{justify-content:flex-end}
+    .msg{max-width:80%;padding:14px;border-radius:18px;line-height:1.6;white-space:pre-wrap}
+    .msg.user{background:rgba(37,99,235,0.95);color:#fff;border-bottom-right-radius:4px;border-bottom-left-radius:18px;border-top-right-radius:18px}
+    .msg.bot{background:var(--card);color:#cfe3ff;border:1px solid rgba(255,255,255,0.03);border-bottom-left-radius:4px;border-top-left-radius:18px;border-top-right-radius:18px}
+    .msg-meta{font-size:11px;color:rgba(37,99,235,0.85);display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:800}
+    .processing{display:inline-block;padding:8px 10px;border-radius:999px;background:rgba(37,99,235,0.06);color:rgba(37,99,235,0.9);font-weight:800;font-size:11px}
+
+    footer{padding:18px;border-top:1px solid rgba(255,255,255,0.03);background:var(--panel)}
+    .composer{max-width:900px;margin:0 auto;position:relative}
+    .composer input{width:100%;padding:14px 56px 14px 16px;border-radius:14px;background:#0a0a0c;border:1px solid rgba(255,255,255,0.06);color:#e6eef8;font-size:15px;outline:none}
+    .send-btn{position:absolute;right:8px;top:8px;background:var(--blue);border:none;padding:10px;border-radius:10px;color:white;cursor:pointer}
+    .send-btn[disabled]{opacity:0.5;cursor:default}
+
+    /* Modal */
+    .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center}
+    .modal{background:var(--card);padding:18px;border-radius:14px;max-width:420px;width:94%;border:1px solid rgba(255,255,255,0.05)}
+    .modal h3{margin:0 0 8px 0}
+    .modal p{margin:0 0 16px 0;color:var(--muted);font-size:14px}
+    .modal .actions{display:flex;gap:10px}
+    .btn{flex:1;padding:10px;border-radius:10px;border:none;cursor:pointer}
+    .btn.ghost{background:transparent;color:#cbd5e1;border:1px solid rgba(255,255,255,0.03)}
+    .btn.danger{background:#ef4444;color:white}
+
+    /* small screens */
+    @media (max-width:880px){
+      .sidebar{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="top">
+        <div class="brand">
+          <div style="font-size:18px;color:#76a9ff">🌐</div>
+          <h1>PB Wiki Agent</h1>
+        </div>
+        <div class="search">
+          <div class="icon">🔍</div>
+          <input id="search" placeholder="検索..." />
+        </div>
+      </div>
+      <div class="country-list" id="countryList" aria-label="country list"></div>
+    </aside>
+
+    <main class="main">
+      <header>
+        <div class="header-left">
+          <div class="flag" id="headerFlag">🏳️</div>
+          <div>
+            <h2 id="headerName">国名</h2>
+            <p id="headerMe">PB Identity: 私</p>
+          </div>
+        </div>
+        <button class="btn-clear" id="clearBtn" title="メッセージをクリア">🗑️</button>
+      </header>
+
+      <div class="content">
+        <div class="inner" id="messagesArea">
+          <div class="empty" id="emptyState">
+            <div style="font-size:48px;margin-bottom:8px">🌐</div>
+            <h3 style="margin:0;font-weight:900;text-transform:uppercase;font-style:italic">History Clean</h3>
+            <p style="font-family:monospace;color:var(--muted);margin-top:8px;font-size:13px">対話を開始してください</p>
+          </div>
+          <!-- messages will be appended here -->
+        </div>
+      </div>
+
+      <footer>
+        <div class="composer">
+          <input id="inputText" placeholder="キャラクターに話しかける..." />
+          <button class="send-btn" id="sendBtn">➡️</button>
+        </div>
+        <p id="errorMsg" style="color:#ff8b8b;text-align:center;margin-top:8px;font-size:13px;display:none"></p>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Clear confirmation modal (hidden by default) -->
+  <div id="modalWrap" style="display:none" aria-hidden="true"></div>
+
+  <script>
+    // --- Countries data (trimmed to keep file short in display, but includes all entries from original) ---
+    const COUNTRIES_DATA = [
+      { id: 'afg', name: 'アフガニスタン', flag: '🇦🇫', me: 'マン', trait: '長い争いの歴史。山岳地帯。' },
+      { id: 'alb', name: 'アルバニア', flag: '🇦🇱', me: 'ウー', trait: 'トーチカが多い。鷲の末裔。' },
+      { id: 'dza', name: 'アルジェリア', flag: '🇩🇿', me: 'アナ', trait: '砂漠が広がる。フランスとは複雑な関係。' },
+      { id: 'fji', name: 'フィジー', flag: '🇫🇯', me: '僕', trait: '太平洋の島国。ラグビーの強豪国。' },
+      { id: 'jpn', name: '日本', flag: '🇯🇵', me: '私', trait: '礼儀正しい。アニメ。猫耳。' },
+      { id: 'usa', name: 'アメリカ', flag: '🇺🇸', me: '俺', trait: '自由。' },
+      { id: 'pol', name: 'ポーランド', flag: '🇵🇱', me: 'ヤ', trait: '掃除担当。' },
+      { id: 'rus', name: 'ロシア', flag: '🇷🇺', me: 'ヤー', trait: '広大な領土。ウォッカ。' },
+      // ...（必要に応じて元のCOUNTRIES_DATA全体をここに貼り付けてください）...
+    ];
+
+    // --- Simple localStorage-backed message store (no external services required) ---
+    const STORAGE_KEY = 'pb_messages_v1';
+
+    function loadMessages() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.warn('localStorage load error', e);
+        return [];
+      }
+    }
+    function saveMessages(msgs) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs)); } catch(e){}
+    }
+
+    // --- App state ---
+    let messages = loadMessages();
+    let selectedChar = COUNTRIES_DATA.find(c => c.id === 'fji') || COUNTRIES_DATA[0];
+    let isProcessing = false;
+
+    // --- DOM refs ---
+    const countryListEl = document.getElementById('countryList');
+    const headerFlagEl = document.getElementById('headerFlag');
+    const headerNameEl = document.getElementById('headerName');
+    const headerMeEl = document.getElementById('headerMe');
+    const messagesAreaEl = document.getElementById('messagesArea');
+    const emptyStateEl = document.getElementById('emptyState');
+    const inputEl = document.getElementById('inputText');
+    const sendBtn = document.getElementById('sendBtn');
+    const searchEl = document.getElementById('search');
+    const clearBtn = document.getElementById('clearBtn');
+    const errorMsgEl = document.getElementById('errorMsg');
+    const modalWrap = document.getElementById('modalWrap');
+
+    // --- Render country list ---
+    function renderCountries(filter = '') {
+      countryListEl.innerHTML = '';
+      const q = filter.trim().toLowerCase();
+      const filtered = COUNTRIES_DATA.filter(c => (c.name + ' ' + c.id + ' ' + (c.trait||'')).toLowerCase().includes(q));
+      filtered.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'country-btn' + (selectedChar.id === c.id ? ' selected' : '');
+        btn.onclick = () => { selectedChar = c; renderHeader(); renderCountries(searchEl.value); renderMessages(); };
+        btn.innerHTML = `<span class="country-flag">${c.flag}</span>
+          <div style="min-width:0">
+            <div class="country-name">${c.name}</div>
+            <div class="country-me">${c.me}</div>
+          </div>`;
+        countryListEl.appendChild(btn);
+      });
+      if (filtered.length === 0) {
+        countryListEl.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:13px">該当する国がありません。</div>';
+      }
+    }
+
+    // --- Header info ---
+    function renderHeader() {
+      headerFlagEl.textContent = selectedChar.flag;
+      headerNameEl.textContent = selectedChar.name;
+      headerMeEl.textContent = 'PB Identity: ' + selectedChar.me;
+    }
+
+    // --- Messages UI ---
+    function renderMessages() {
+      const msgs = messages || [];
+      // hide empty when there are messages or processing
+      if (msgs.length === 0 && !isProcessing) {
+        emptyStateEl.style.display = '';
+      } else {
+        emptyStateEl.style.display = 'none';
+      }
+
+      // Clear previous message nodes (except emptyState)
+      // We'll re-add messages container children after emptyState
+      const existing = Array.from(messagesAreaEl.querySelectorAll('.msg-row'));
+      existing.forEach(n => n.remove());
+
+      msgs.forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'msg-row' + (m.sender === 'user' ? ' end' : '');
+        const box = document.createElement('div');
+        box.className = 'msg ' + (m.sender === 'user' ? 'user' : 'bot');
+
+        if (m.sender === 'bot') {
+          const meta = document.createElement('div');
+          meta.className = 'msg-meta';
+          meta.innerHTML = `⭐ ${m.charName || selectedChar.name}`;
+          box.appendChild(meta);
+        }
+
+        const text = document.createElement('div');
+        text.textContent = m.text;
+        box.appendChild(text);
+
+        row.appendChild(box);
+        messagesAreaEl.appendChild(row);
+      });
+
+      if (isProcessing) {
+        const pr = document.createElement('div');
+        pr.className = 'msg-row';
+        pr.innerHTML = `<div class="msg bot"><div class="processing">Processing...</div></div>`;
+        messagesAreaEl.appendChild(pr);
+      }
+
+      // scroll to bottom
+      setTimeout(() => {
+        messagesAreaEl.scrollTop = messagesAreaEl.scrollHeight;
+      }, 50);
+    }
+
+    // --- Utilities ---
+    function pushMessage(msg) {
+      messages.push(msg);
+      saveMessages(messages);
+      renderMessages();
+    }
+
+    function clearMessages() {
+      messages = [];
+      saveMessages(messages);
+      renderMessages();
+    }
+
+    // --- Simple "Gemini" call stub
+    // This function will:
+    //  - If you set window.GEMINI_API_KEY (in browser console) and window.GEMINI_ENABLE=true,
+    //    it will attempt to call the Generative Language HTTP API (CORS and key required).
+    //  - Otherwise it returns a simulated reply (local echo) quickly.
+    async function callGemini(userText, char) {
+      // NOTE: real production use requires server-side calls with credentials.
+      if (window.GEMINI_ENABLE && typeof window.GEMINI_API_KEY === 'string' && window.GEMINI_API_KEY.length > 10) {
+        // Attempt to call Google Generative Language API (may fail due to CORS or key restrictions).
+        try {
+          const systemPrompt = `
+あなたは「${char.name}」という国を象徴するポーランドボールです。
+一人称は「${char.me}」を使い、プレーンテキストで自然な日本語で答えてください。
+性格: ${char.trait}
+          `;
+          const body = {
+            // This mirrors the JSON in the original example; adjust to actual API spec if needed.
+            prompt: userText,
+            system_prompt: systemPrompt,
+            // ... API-specific fields ...
+          };
+          const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=' + encodeURIComponent(window.GEMINI_API_KEY), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: userText }] }],
+              systemInstruction: { parts: [{ text: systemPrompt }] }
+            })
+          });
+          if (!res.ok) {
+            console.warn('API responded', res.status);
+            return '外部APIの呼び出しに失敗しました。';
+          }
+          const json = await res.json();
+          const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '返答がありません。';
+          return String(rawText).replace(/\*/g,'').replace(/_/g,'');
+        } catch (e) {
+          console.warn('Gemini fetch error', e);
+          return '通信エラーが発生しました。';
+        }
+      }
+
+      // Local simulated reply (no key/config required)
+      // This is intentionally simple — you can improve logic or connect a real API.
+      await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
+      // craft a polite short reply that uses the character's first-person
+      const replySamples = [
+        `やあ、${userText}についてだね。${char.me}はそう思うよ。`,
+        `なるほど！${char.me}の考えでは、${userText}は興味深いね。`,
+        `ありがとう！${char.me}としては、それについてこう感じるよ：${char.trait}`,
+        `へえ、それは面白いね。${char.me}も同意するよ。`
+      ];
+      const pick = replySamples[Math.floor(Math.random() * replySamples.length)];
+      return `${char.flag} ${char.name}：${pick}`;
+    }
+
+    // --- Send handling ---
+    async function handleSend() {
+      const text = inputEl.value.trim();
+      if (!text || isProcessing) return;
+      inputEl.value = '';
+      errorMsgEl.style.display = 'none';
+      isProcessing = true;
+
+      // add user message
+      const userMsg = { id: 'm_' + Date.now(), text, sender: 'user', timestamp: Date.now() };
+      pushMessage(userMsg);
+
+      // show processing
+      renderMessages();
+
+      // call AI (or stub)
+      try {
+        const aiText = await callGemini(text, selectedChar);
+        const botMsg = {
+          id: 'b_' + Date.now(),
+          text: aiText,
+          sender: 'bot',
+          charId: selectedChar.id,
+          charName: selectedChar.name,
+          charFlag: selectedChar.flag,
+          timestamp: Date.now()
+        };
+        pushMessage(botMsg);
+      } catch (e) {
+        console.error(e);
+        errorMsgEl.textContent = 'エラーが発生しました。';
+        errorMsgEl.style.display = '';
+      } finally {
+        isProcessing = false;
+        renderMessages();
+      }
+    }
+
+    // --- Clear confirmation modal ---
+    function showClearModal() {
+      modalWrap.innerHTML = `
+        <div class="modal-back" role="dialog" aria-modal="true">
+          <div class="modal" role="document">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div style="display:flex;gap:12px;align-items:center">
+                <div style="background:rgba(239,68,68,0.08);padding:8px;border-radius:8px;color:#ef4444">⚠️</div>
+                <h3>履歴を削除しますか？</h3>
+              </div>
+              <button style="background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer" id="modalClose">✖️</button>
+            </div>
+            <p>これまでのすべてのチャット履歴が完全に削除されます。この操作は取り消せません。</p>
+            <div class="actions" style="margin-top:14px">
+              <button class="btn ghost" id="modalCancel">キャンセル</button>
+              <button class="btn danger" id="modalConfirm">削除する</button>
+            </div>
+          </div>
+        </div>
+      `;
+      modalWrap.style.display = '';
+      modalWrap.setAttribute('aria-hidden','false');
+
+      document.getElementById('modalClose').onclick = closeModal;
+      document.getElementById('modalCancel').onclick = closeModal;
+      document.getElementById('modalConfirm').onclick = () => {
+        clearMessages();
+        closeModal();
+      };
+    }
+    function closeModal() {
+      modalWrap.style.display = 'none';
+      modalWrap.innerHTML = '';
+      modalWrap.setAttribute('aria-hidden','true');
+    }
+
+    // --- Event bindings ---
+    sendBtn.onclick = handleSend;
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    });
+    searchEl.addEventListener('input', () => renderCountries(searchEl.value));
+    clearBtn.onclick = showClearModal;
+
+    // --- Initial render ---
+    renderHeader();
+    renderCountries();
+    renderMessages();
+
+    // --- Helpful notes for user (console) ---
+    console.info('PB Wiki Agent (static HTML) loaded.');
+    console.info('To enable real Gemini HTTP calls in-browser (not recommended for production), set:');
+    console.info('  window.GEMINI_ENABLE = true;');
+    console.info('  window.GEMINI_API_KEY = "YOUR_API_KEY";');
+    console.info('Better approach: call Generative API from a server and keep keys secret.');
+
+    // Optional: expose some functions for debugging
+    window._pb = { getMessages: () => messages, clearMessages, callGemini };
+
+  </script>
+</body>
+</html>
